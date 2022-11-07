@@ -1,0 +1,51 @@
+version: '3.1'
+
+services:
+  sentinel:
+    image: redistest/sentinel
+    restart: 'on-failure'
+    ports:
+      - 5432:5432
+    environment:
+    volumes:
+      - logdata:/var/log
+
+  sentinelcache1:
+    image: redistest/sentinelcache
+    restart: 'on-failure'
+    ports:
+      - 5432:5432
+    environment:
+    volumes:
+      - logdata:/var/log
+
+  sentinelcache2:
+    image: redistest/sentinelcache
+    restart: 'on-failure'
+    ports:
+      - 5432:5432
+    environment:
+    volumes:
+      - logdata:/var/log
+  
+  daemon:
+    image: redistest/daemon
+    restart: 'on-failure'
+    ports:
+      - 5432:5432
+    environment:
+    volumes:
+      - logdata:/var/log
+  
+  load:
+    image: redistest/loaddriver
+    restart: 'on-failure'
+    ports:
+      - 5432:5432
+    environment:
+    volumes:
+      - logdata:/var/log
+
+volumes:
+  logdata:
+    external: false  
