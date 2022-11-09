@@ -7,35 +7,47 @@
 #include <fcntl.h>  // for open
 #include <unistd.h> // for close
 #include <pthread.h>
-
-char client_message[2000];
-char buffer[1024];
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+#include <signal.h>
+#include <errno.h>
 
 void *socketThread(void *arg)
 {
+  char client_message[2000];
   int newSocket = *((int *)arg);
-  recv(newSocket, client_message, 2000, 0);
-
+  free(arg);
+  int bytesReceived = recv(newSocket, client_message, sizeof(client_message)-1, 0);
+  if(bytesReceived == 0)
+  {
+    printf("zero bytes read\n");
+  }
+  if(bytesReceived == -1)
+  {
+    printf("read error %d\n", errno);
+  }
+  client_message[bytesReceived] = 0;
   // Send message to the client socket
-  pthread_mutex_lock(&lock);
-  char *message = malloc(sizeof(client_message) + 20);
-  strcpy(message, "Hello Client : ");
+  char *messagePrefix = "Hello Client : ";
+  char *message = malloc(sizeof(client_message) + strlen(messagePrefix));
+  strcpy(message, messagePrefix);
   strcat(message, client_message);
-  strcat(message, "\n");
-  strcpy(buffer, message);
+  printf("%s\n", message);
+  int sendrc = send(newSocket, message, strlen(message), 0);
+  if(sendrc == -1)
+  {
+    printf("send error %d\n", errno);
+  }
   free(message);
-  pthread_mutex_unlock(&lock);
-  sleep(1);
-  send(newSocket, buffer, 13, 0);
-  printf("Exit socketThread \n");
-  close(newSocket);
+  int closerc = close(newSocket);
+  if(closerc == -1)
+  {
+    printf("read error %d\n", errno);
+  }
   pthread_exit(NULL);
 }
 
 int main()
 {
-  int serverSocket, newSocket;
+  int serverSocket;
   struct sockaddr_in serverAddr;
   struct sockaddr_storage serverStorage;
   socklen_t addr_size;
@@ -66,7 +78,7 @@ int main()
   }
   else
   {
-    printf("Error\n");
+    printf("Error %d\n", errno);
   }
 
   pthread_t tid[60];
@@ -75,11 +87,18 @@ int main()
   {
     // Accept call creates a new socket for the incoming connection
     addr_size = sizeof serverStorage;
-    newSocket = accept(serverSocket, (struct sockaddr *)&serverStorage, &addr_size);
+    int newSocket = accept(serverSocket, (struct sockaddr *)&serverStorage, &addr_size);
 
+  if(newSocket == -1)
+  {
+    printf("socket error %d\n", errno);
+    abort();
+  }
     // for each client request creates a thread and assign the client request to it to process
     // so the main thread can entertain next request
-    if (pthread_create(&tid[i++], NULL, socketThread, &newSocket) != 0)
+    int *sockPointer = malloc(sizeof(newSocket));
+    *sockPointer = newSocket;
+    if (pthread_create(&tid[i++], NULL, socketThread, sockPointer) != 0)
       printf("Failed to create thread\n");
 
     if (i >= 50)
@@ -87,7 +106,11 @@ int main()
       i = 0;
       while (i < 50)
       {
-        pthread_join(tid[i++], NULL);
+        int errorNumber = pthread_join(tid[i++], NULL);
+        if(errorNumber != 0)
+        {
+          printf("pthread_join error %d\n",errorNumber);
+        }
       }
       i = 0;
     }
